@@ -21,4 +21,8 @@
 #define INIT_SSTHRESH 5120
 #define EC_FR 1536
 
+#define ACK 0b00000001
+#define SYN 0b00000010
+#define FIN 0b00000100
+
 #endif /* macros_h */
