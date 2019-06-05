@@ -76,15 +76,15 @@ public:
 	}
 
 	bool isACK() {
-		return (hd.flags & ACK)
+        return (hd.flags & ACK);
 	}
 
 	bool isSYN() {
-		return (hd.flags & SYN)
+        return (hd.flags & SYN);
 	}
 
 	bool isFIN() {
-		return (hd.flags & FIN)
+        return (hd.flags & FIN);
 	}
 
 	void setFlag(int f) {
@@ -92,7 +92,7 @@ public:
 		case ACK_FLAG:
 			hd.flags = hd.flags | ACK;
 			break;
-		case SYN_FLAG
+        case SYN_FLAG:
 			hd.flags = hd.flags | SYN;
 			break;
 		case FIN_FLAG:
@@ -135,7 +135,7 @@ public:
 		hd.flags = buf[8];
 		hd.len = payload_length = (buf[10] << 8) | buf[9];
 		for (int i = 0; i < payload_length; i++) {
-			payload[i] = buff[12 + i];
+			payload[i] = buf[12 + i];
 		}
 	}
 
@@ -148,7 +148,7 @@ public:
 	}
 
 	//copy operator overload
-	packet &operator=(constpacket &other) {
+	packet &operator=(const packet &other) {
 		if (this != &other) {
 			hd = other.hd;
 			sent = other.sent;
@@ -174,4 +174,5 @@ public:
 		return (elapsed_seconds.count() > 0.5);
 	}
 };
+
 
