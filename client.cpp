@@ -66,3 +66,135 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
     sendingPacket.setSent();
 }
 
+
+/*
+#include <winsock2.h>
+#include <windows.h>
+#include <iostream>
+#include <vector>
+#include <fstream> 
+#include <sys/types.h>
+#include <algorithm>
+#include "packet.h"
+using namespace std;
+
+int cwnd = 512;
+int ssthresh = 5120;
+int packet_count = 0;
+vector<packet> Sender_window;
+int ackNumber = 0;
+int seqNumber = 0;
+
+void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char* fileBuffer)
+{
+    socklen_t sin_size = sizeof(struct sockaddr_in);
+    int lastACK = -1;
+    int dupACK = -1;
+    int dupACK_count = 0;
+    bool FR = false;
+    bool CA = false;
+    char send_buf[PACKET_SIZE + 1];
+    char read_buf[PACKET_SIZE + 1];
+    while (fileSize > 0) {
+        if (Sender_window.size() < cwnd / PAYLOAD)
+        {
+            packet sending_packet;
+            sending_packet.setSeqNum(seqNumber);
+            sending_packet.setAckNum(ackNumber);
+            if (fileSize < PAYLOAD) {
+                sending_packet.setPayload(fileBuffer + packet_count * PAYLOAD, (int)fileSize);
+                fileSize = 0;
+            }
+            else {
+                sending_packet.setPayload(fileBuffer + packet_count * PAYLOAD, (int)PAYLOAD);
+                fileSize -= PAYLOAD;
+            }
+
+            sending_packet.DeConstructPacket(send_buf);
+            Sender_window.push_back(sending_packet);
+            if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
+                sizeof(addr)) < 0) {
+                cerr << "Could not send to the client" << endl;
+            }
+            else {
+                Sender_window.back().setSent();
+                Sender_window.back().initTimer();
+                cout << "SEND " << seqNumber << ' ' << ackNumber << ' ' << cwnd << ' ' << ssthresh << endl;
+                seqNumber += Sender_window.back().getLength;
+                packet_count++;
+                
+            }
+        }// end if 
+        
+        memset(read_buf, 0, PACKET_SIZE + 1);
+        int recvlen = recvfrom(sockfd, read_buf, PACKET_SIZE, 0 | MSG_DONTWAIT,
+            (struct sockaddr *)&addr, &sin_size);
+
+
+        if (recvlen > 0) {
+            packet receiving_packet;
+            read_buf[recvlen] = 0;
+            receiving_packet.ConstructPacket(read_buf);
+            int Server_ack = receiving_packet.getAckNum();
+            cout << "RECV" << receiving_packet.getSeqNum() << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh;
+            if (Server_ack == lastACK) {
+                dupACK_count++;
+                if (dupACK == 3) {
+                    FR = true;
+                    ssthresh = max(cwnd / 2, 1024);
+                    cwnd = ssthresh + 1536;
+                    Sender_window[0].DeConstructPacket(send_buf);
+                    if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
+                        sizeof(addr)) < 0) {
+                        cerr << "Could not send to the client" << endl;
+                    }
+                    else {
+                        Sender_window[0].initTimer();
+                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << Sender_window[0].getAckNum() << ' ' << cwnd << ' ' << ssthresh << endl;
+                    }
+                }
+                else if (dupACK > 3){
+                    cwnd += PAYLOAD;
+                }
+                else break;
+            }
+            else {
+                lastACK = Server_ack;
+                dupACK_count = 0;
+                if (FR) {
+                    FR = false;
+                    CA = true;
+                    cwnd = ssthresh;
+                }
+                int move_count = 0;
+                for (int i = 0; i < Sender_window.size(); i++) {
+                    if (Sender_window[i].getSeqNum() <= Server_ack) move_count++;
+                    else break;
+                }
+                Sender_window.erase(Sender_window.begin(), Sender_window.begin() + move_count);
+                if (cwnd >= ssthresh) CA = true;
+                if (CA) cwnd += PAYLOAD * PAYLOAD / cwnd;
+                else cwnd += PAYLOAD;
+            }
+        } //end if
+        if (Sender_window.size() > 0) {
+            if (Sender_window[0].checkTimeout()) {
+                FR = true;
+                ssthresh = max(cwnd / 2, 1024);
+                cwnd = ssthresh + 1536;
+                Sender_window[0].DeConstructPacket(send_buf);
+                if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
+                    sizeof(addr)) < 0) {
+                    cerr << "Could not send to the client" << endl;
+                }
+                else {
+                    Sender_window[0].initTimer();
+                    cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << Sender_window[0].getAckNum() << ' ' << cwnd << ' ' << ssthresh << endl;
+                }
+            }
+        }
+
+    } //end while
+}
+
+*/
