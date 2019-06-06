@@ -140,3 +140,139 @@ void openConnection(int sockfd, struct sockaddr_in &addr){
 
 
 void closeConnection()
+    
+    
+    
+    
+    
+    
+/*
+#include <iostream>
+#include "packet.h"
+#include <vector>
+#include <fstream> 
+#include <sys/types.h>
+
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+using namespace std;
+
+#define RECEIVER_WINDOW_SIZE 20
+
+vector<char> TempFile; //for the temporary file
+vector<packet> Receiver_window;
+int FirstSeqInWindow, lastSeqinWindow;
+
+
+void sendACK(int sockfd, struct sockaddr_in addr, packet ack_p) {
+
+}
+
+void receiveFile(int sockfd, struct sockaddr_in addr)
+{
+    //initialize the receiver's window
+    for (int i = 0; i < RECEIVER_WINDOW_SIZE; i++)
+    {
+        Receiver_window.push_back(packet());
+        Receiver_window[i].setSeqNum(PAYLOAD*i);
+    }
+    FirstSeqInWindow = 0;
+    lastSeqinWindow = PAYLOAD * RECEIVER_WINDOW_SIZE - PAYLOAD;
+
+
+
+    int recv_len;
+    socklen_t sin_size;
+    char buf[PACKET_SIZE + 1];
+    while (true) {
+        recv_len = recvfrom(sockfd, buf, PACKET_SIZE, 0 | MSG_DONTWAIT,
+            (struct sockaddr *)&addr, &sin_size);
+
+
+        if (recv_len > 0) {
+            packet received_packet;
+            received_packet.ConstructPacket(buf);
+            cout << "RECV " << received_packet.getSeqNum() << ' ' << received_packet.getAckNum() << ' ' << 0 << ' ' << 0;
+
+            if (received_packet.isFIN()) {
+                cout << " FIN" << endl;
+                //TODO: send ACK
+                break;
+            }// end if(isFIN)
+
+            int currentSeq = received_packet.getSeqNum();
+            int windowPos = (currentSeq - FirstSeqInWindow) / PAYLOAD;
+            //check duplicate
+            if (Receiver_window[windowPos].isAcked()) {
+                //TODO send ACK
+                break;
+            }
+            else {
+                Receiver_window[windowPos] = received_packet;
+                Receiver_window[windowPos].setAcked();
+            }
+
+            //move window and transfer to buffer
+            int move_counter = 0;
+            for (int i = 0; i < RECEIVER_WINDOW_SIZE; i++) {
+                if (Receiver_window[i].isAcked()) {
+                    char buffer[1024];
+                    Receiver_window[i].getPayload(buffer);
+                    for (int j = 0; j < Receiver_window[i].getLength(); i++) {
+                        TempFile.push_back(buffer[j]);
+                    }
+                    move_counter++;
+                } //end if
+                else break;
+            } //end for
+
+            for (int i = 0; i < move_counter; i++) {
+                Receiver_window.erase(Receiver_window.begin());
+                Receiver_window.push_back(packet());
+                Receiver_window.end()->setSeqNum(lastSeqinWindow + (i + 1) * PAYLOAD);
+            }
+            FirstSeqInWindow += move_counter * PAYLOAD;
+            lastSeqinWindow += move_counter * PAYLOAD;
+
+            //TODO send ACK
+
+
+        } //end if
+
+
+    } //end while
+}
+
+
+
+void assemblePackets()
+{
+    char* actualfile = new char[TempFile.size() + 1];
+    copy(TempFile.begin(), TempFile.end(), actualfile);
+    ofstream outfile("1.file", ios::binary | ios::out);
+    outfile.write(actualfile, TempFile.size());
+    outfile.close();
+
+    delete actualfile;
+    TempFile.clear(); //ready for next file
+}
+
+int main() {
+
+}
+*/
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
