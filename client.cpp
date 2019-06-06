@@ -68,22 +68,25 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
 
 
 /*
-#include <winsock2.h>
-#include <windows.h>
+
 #include <iostream>
 #include <vector>
 #include <fstream> 
 #include <sys/types.h>
 #include <algorithm>
 #include "packet.h"
+
+#include <netdb.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
 using namespace std;
 
 int cwnd = 512;
 int ssthresh = 5120;
 int packet_count = 0;
 vector<packet> Sender_window;
-int ackNumber = 0;
-int seqNumber = 0;
+int ackNumber = 0; //sending packet's ack number, = receiving ack packet's seq number + 1
+int seqNumber = 0; //sending packet's sequence number
 
 void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char* fileBuffer)
 {
@@ -95,7 +98,7 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
     bool CA = false;
     char send_buf[PACKET_SIZE + 1];
     char read_buf[PACKET_SIZE + 1];
-    while (fileSize > 0) {
+    while ((fileSize > 0) || (Sender_window.size() > 0)) {
         if (Sender_window.size() < cwnd / PAYLOAD)
         {
             packet sending_packet;
@@ -111,16 +114,17 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
             }
 
             sending_packet.DeConstructPacket(send_buf);
-            Sender_window.push_back(sending_packet);
+            
             if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
                 sizeof(addr)) < 0) {
                 cerr << "Could not send to the client" << endl;
             }
             else {
+                Sender_window.push_back(sending_packet);
                 Sender_window.back().setSent();
                 Sender_window.back().initTimer();
                 cout << "SEND " << seqNumber << ' ' << ackNumber << ' ' << cwnd << ' ' << ssthresh << endl;
-                seqNumber += Sender_window.back().getLength;
+                seqNumber = (seqNumber + Sender_window.back().getLength) % 25601;
                 packet_count++;
                 
             }
@@ -135,6 +139,7 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
             packet receiving_packet;
             read_buf[recvlen] = 0;
             receiving_packet.ConstructPacket(read_buf);
+            ackNumber = (receiving_packet.getSeqNum() + 1) % 25601;
             int Server_ack = receiving_packet.getAckNum();
             cout << "RECV" << receiving_packet.getSeqNum() << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh;
             if (Server_ack == lastACK) {
@@ -150,11 +155,12 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                     }
                     else {
                         Sender_window[0].initTimer();
-                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << Sender_window[0].getAckNum() << ' ' << cwnd << ' ' << ssthresh << endl;
+                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << receiving_packet.getSeqNum() + 1 << ' ' << cwnd << ' ' << ssthresh << ' ' << "DUP" <<endl;
                     }
                 }
                 else if (dupACK > 3){
                     cwnd += PAYLOAD;
+                    if (cwnd > 10240) cwnd = 10240;
                 }
                 else break;
             }
@@ -196,5 +202,6 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
 
     } //end while
 }
+
 
 */
