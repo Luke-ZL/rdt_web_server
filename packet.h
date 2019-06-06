@@ -30,7 +30,7 @@ public:
 		memset(payload, 0, PAYLOAD);
 		memset(&hd, 0, sizeof(hd));
 		sent = acked = false;
-		payload_length = PAYLOAD;
+		payload_length = 0;
 	}
 
 	//constructor with size 
