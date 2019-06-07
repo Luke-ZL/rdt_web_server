@@ -60,7 +60,7 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
     srand(time(NULL));
 
     packet sendingPacket;
-    SeqNum_CLIENT = rand() % 25600;
+    SeqNum_CLIENT = rand() % 25601;
     sendingPacket.setFlag(SYN_FLAG);
     sendingPacket.setAckNum(0);
     sendingPacket.setSeqNum(SeqNum_CLIENT);
@@ -71,7 +71,7 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
         cerr << "ERROR: sending packet failed" << endl;
         exit(1);
     }
-                    
+    SeqNum_CLIENT = (SeqNum_CLIENT + 1) % 25601;                
     sendingPacket.initTimer();
     sendingPacket.setSent();
     
@@ -85,9 +85,9 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
             packet receivedPacket;
             receivedPacket.ConstructPacket(buf);
             printMessage(receivedPacket,false,false);
-            if(receivedPacket.isACK() and receivedPacket.isSYN() and receivedPacket.getAckNum() == SeqNum_CLIENT+1){
+            if(receivedPacket.isACK() and receivedPacket.isSYN() and receivedPacket.getAckNum() == SeqNum_CLIENT){
                 SeqNum_CLIENT = receivedPacket.getAckNum();
-                client_ack = receivedPacket.getSeqNum() + 1;
+                client_ack = (receivedPacket.getSeqNum() + 1) % 25601;
                 return;
             }
         }
@@ -210,9 +210,7 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
 
 void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
     packet sendFINPacket;
-    if(SeqNum_CLIENT+1 > 25600)
-        SeqNum_CLIENT = 0;
-    SeqNum_CLIENT++;
+    //SeqNum_CLIENT = (SeqNum_CLIENT + 1) % 25601;
     packet receivedPacket;
     char buffer[PACKET_SIZE+1];
     char send[PACKET_SIZE+1];
@@ -228,6 +226,7 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
         cerr << "ERROR: sending packet failed" << endl;
         exit(1);
     }
+	SeqNum_CLIENT = (SeqNum_CLIENT + 1) % 25601;
     sendFINPacket.setSent();
     sendFINPacket.initTimer();
     memset((char*)&send,0,PACKET_SIZE+1);
@@ -250,9 +249,6 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
                 if(SeqNum_SERVER + 1 > 25600)
                     SeqNum_SERVER = 0;
                 ackPacket.setAckNum(SeqNum_SERVER + 1);
-                if(SeqNum_CLIENT+1 > 25600)
-                    SeqNum_CLIENT = 0;
-                SeqNum_CLIENT++;
                 ackPacket.setSeqNum(SeqNum_CLIENT);
                 ackPacket.DeConstructPacket(send);
                 printMessage(ackPacket, true, false);
@@ -353,7 +349,7 @@ int main(int argc, char *argv[]){
     //ackNumber = client_ack;
     //seqNumber = SeqNum_CLIENT;
     //sendFile();
-    
+    cout << "finished" << endl;
     clientCloseConnection(sockfd, addr);
     
     return 0;

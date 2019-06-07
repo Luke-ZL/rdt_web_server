@@ -80,18 +80,16 @@ void serverOpenConnection(int sockfd, struct sockaddr_in &addr){
                 packet sendingPacket;
                 if(!init[0].isSent()){
                     SeqNum_CLIENT = receivedPacket.getSeqNum();
-                    SeqNum_SERVER = rand() % 25600;
+                    SeqNum_SERVER = rand() % 25601;
                     sendingPacket.setFlag(ACK_FLAG);
                     sendingPacket.setFlag(SYN_FLAG);
-                    if(SeqNum_CLIENT + 1 > 25600)
-                        SeqNum_CLIENT = 0;
-                    sendingPacket.setAckNum(SeqNum_CLIENT + 1);
+                    sendingPacket.setAckNum((SeqNum_CLIENT + 1) % 25601);
                     sendingPacket.setSeqNum(SeqNum_SERVER);
                     sendingPacket.DeConstructPacket(send);
                     printMessage(sendingPacket, true, false);
                     
-                    sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
-                    
+                    if (sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr)) < 0) cerr << "ERROR Sendto\n";
+                    SeqNum_SERVER = (SeqNum_SERVER + 1) % 25601;
                     init[0] = sendingPacket;
                     sendingPacket.initTimer();
                     sendingPacket.setSent();
@@ -214,7 +212,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             }
             else {
                 Receiver_window[windowPos] = received_packet;
-                Receiver_window[windowPos].setAcked();
+                Receiver_window[windowPos].%ed();
             }
             //move window and transfer to buffer
             int move_counter = 0;
@@ -271,7 +269,7 @@ int main(int argc, char *argv[]){
     struct sockaddr_in their_addr;
 
     if ((sockfd = socket(AF_INET, SOCK_DGRAM, 0)) < 0)
-        throwError("socket");
+      cerr << "socket" << endl;
     
     memset((char *)&my_addr, 0, sizeof(my_addr));
     my_addr.sin_family = AF_INET;
@@ -284,7 +282,7 @@ int main(int argc, char *argv[]){
     serverOpenConnection(sockfd, their_addr);
     
     //receiveFile(sockfd, addr);
-    
+    cout << "finished" << endl;
     serverCloseConnection(sockfd, their_addr);
     
     return(1);
