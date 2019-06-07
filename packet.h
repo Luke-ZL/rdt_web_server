@@ -13,7 +13,7 @@ private:
 	struct header {
 		uint32_t SeqNum;
 		uint32_t AckNum;
-	        uint16_t len;
+	    uint16_t len;
 		uint8_t flags;
 		uint8_t padding = 0;
 	}; //12 bytes in total
@@ -130,10 +130,10 @@ public:
 	//resetAcked
 
 	void ConstructPacket(char* buf) {
-		hd.SeqNum = (((buf[3] << 24) | (buf[2] << 16)) | (buf[1] << 8)) | buf[0];
-		hd.AckNum = (((buf[7] << 24) | (buf[6] << 16)) | (buf[5] << 8)) | buf[4];
-		hd.flags = buf[10];
-		hd.len = payload_length = (buf[9] << 8) | buf[8];
+	        hd.SeqNum = (uint32_t)((((uint8_t)buf[0] << 24) | ((uint8_t)buf[1] << 16)) | ((uint8_t)buf[2] << 8)) | (uint8_t)buf[3];
+		hd.AckNum = (uint32_t)((((uint8_t)buf[4] << 24) | ((uint8_t)buf[5] << 16)) | ((uint8_t)buf[6] << 8)) | (uint8_t)buf[7];
+		hd.flags = (uint8_t)buf[10];
+		hd.len = payload_length = ((uint8_t)buf[8] << 8) | (uint8_t)buf[9];
 		for (int i = 0; i < payload_length; i++) {
 			payload[i] = buf[12 + i];
 		}
@@ -142,7 +142,17 @@ public:
 	void DeConstructPacket(char* buf) {
 		memset(buf, 0, sizeof(buf));
 
-		memcpy(buf, &hd, 12);
+		buf[0] = (hd.SeqNum >> 24) & 0xFF;
+		buf[1] = (hd.SeqNum >> 16) & 0xFF;
+		buf[2] = (hd.SeqNum >> 8) & 0xFF;
+		buf[3] = hd.SeqNum & 0xFF;
+		buf[4] = (hd.AckNum >> 24) & 0xFF;
+		buf[5] = (hd.AckNum >> 16) & 0xFF;
+		buf[6] = (hd.AckNum >> 8) & 0xFF;
+		buf[7] = hd.AckNum & 0xFF;
+		buf[8]= (hd.len >> 8) & 0xFF;
+		buf[9]= hd.len & 0xFF;
+		buf[10] = hd.flags & 0xFF;
 		memcpy(buf + 12, payload, hd.len);
 		payload_length = hd.len;
 	}
