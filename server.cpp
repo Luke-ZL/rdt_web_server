@@ -20,6 +20,7 @@
 #include "packet.h"
 #include <time.h>
 #include <stdlib.h>
+#include <csignal>
 using namespace std;
 
 #define RECEIVER_WINDOW_SIZE 20
@@ -32,6 +33,11 @@ packet init[2];
 uint32_t SeqNum_SERVER = 0;
 uint32_t SeqNum_CLIENT;
 
+
+void sigHandler(int signum){
+    cerr << "INTERRUPT: Interrupted signal received" <<endl;
+    exit(0);
+}
 
 void printMessage(packet mPacket, bool Sent, bool isDup){
     /*
@@ -121,33 +127,36 @@ void serverCloseConnection(int sockfd, struct sockaddr_in &addr){
             receivedPacket.ConstructPacket(buffer);
             printMessage(receivedPacket, false, false);
             
-            packet ackPacket;
-            //SEND ACK PACKET
-            SeqNum_CLIENT = receivedPacket.getSeqNum();
-            ackPacket.setFlag(ACK_FLAG);
-            if(SeqNum_CLIENT + 1 > 25600)
-                SeqNum_CLIENT = 0;
-            ackPacket.setAckNum(SeqNum_CLIENT + 1);
-            ackPacket.setSeqNum(SeqNum_SERVER);
-            ackPacket.DeConstructPacket(send);
-            printMessage(ackPacket, true, false);
-            
-            sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
-            
-            memset((char*)&send,0,PACKET_SIZE+1);
-            
-            
-            //send FIN packet
-            packet finPacket;
-            finPacket.setFlag(FIN_FLAG);
-            finPacket.setAckNum(0);
-            finPacket.setSeqNum(SeqNum_SERVER);
-            finPacket.DeConstructPacket(send);
-            printMessage(finPacket, true, false);
-            sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
-            
-            
-            memset((char*)&buffer,0,PACKET_SIZE+1);
+            if(receivedPacket.isFIN()){
+                packet ackPacket;
+                //SEND ACK PACKET
+                SeqNum_CLIENT = receivedPacket.getSeqNum();
+                ackPacket.setFlag(FIN_FLAG);
+                ackPacket.setFlag(ACK_FLAG);
+                if(SeqNum_CLIENT + 1 > 25600)
+                    SeqNum_CLIENT = 0;
+                ackPacket.setAckNum(SeqNum_CLIENT + 1);
+                ackPacket.setSeqNum(SeqNum_SERVER);
+                ackPacket.DeConstructPacket(send);
+                printMessage(ackPacket, true, false);
+                
+                sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
+                
+                memset((char*)&send,0,PACKET_SIZE+1);
+                
+                
+                //send FIN packet
+                packet finPacket;
+                finPacket.setFlag(FIN_FLAG);
+                finPacket.setAckNum(0);
+                finPacket.setSeqNum(SeqNum_SERVER);
+                finPacket.DeConstructPacket(send);
+                printMessage(finPacket, true, false);
+                sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
+                
+                
+                memset((char*)&buffer,0,PACKET_SIZE+1);
+            }
         }
     }
 }
@@ -254,6 +263,9 @@ int main(int argc, char *argv[]){
         cerr << "ERROR: Invalid arguments" << endl;
         exit(1);
     }
+    
+    signal(SIGQUIT,sigHandler);
+    signal(SIGTERM,sigHandler);
     
     int port = atoi(argv[1]);
     if (port < 1023 || port > 65535) {
