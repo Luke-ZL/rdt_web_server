@@ -32,11 +32,11 @@ int ackackNumber; //ack package's ack number
 packet init[2];
 uint32_t SeqNum_SERVER = 0;
 uint32_t SeqNum_CLIENT;
-
+int file_assembled = 0;
 
 void sigHandler(int signum){
     cerr << "INTERRUPT: Interrupted signal received" <<endl;
-    exit(0);
+    exit(1);
 }
 
 void printMessage(packet mPacket, bool Sent, bool isDup){
@@ -194,6 +194,9 @@ void sendACK(int sockfd, struct sockaddr_in addr, int ack_num, bool finpa, bool 
 
 void receiveFile(int sockfd, struct sockaddr_in addr)
 {
+    
+
+  
     ackackNumber = (SeqNum_CLIENT + 1) % 25601;
     //initialize the receiver's window
     for (int i = 0; i < RECEIVER_WINDOW_SIZE; i++)
@@ -206,7 +209,14 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
     int recv_len;
     socklen_t sin_size;
     char buf[PACKET_SIZE + 1];
+
+    chrono::time_point<chrono::system_clock> timer = chrono::system_clock::now();
+    chrono::time_point<chrono::system_clock> now;
     while (true) {
+      now = chrono::system_clock::now();
+      chrono::duration<double> elapsed_seconds = now  - timer;
+      if (elapsed_seconds.count() > 10) return;
+      
         recv_len = recvfrom(sockfd, buf, PACKET_SIZE, 0 | MSG_DONTWAIT,
             (struct sockaddr *)&addr, &sin_size);
         if (recv_len > 0) {
@@ -214,6 +224,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             received_packet.ConstructPacket(buf);
 			
 	    if (received_packet.getLength() == 0 && !received_packet.isFIN()) continue;
+	    else timer = chrono::system_clock::now();
 
 	    bool outside_window = false;
 	    if (FirstSeqInWindow > lastSeqinWindow){
@@ -237,8 +248,14 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             }// end if(isFIN)
             //int currentSeq = received_packet.getSeqNum();
             int windowPos;
-	    if (SeqNum_CLIENT >= FirstSeqInWindow) windowPos = (SeqNum_CLIENT - FirstSeqInWindow) / PAYLOAD;
-	    else windowPos = (SeqNum_CLIENT + 25601 - FirstSeqInWindow) / PAYLOAD;
+	    if (SeqNum_CLIENT >= FirstSeqInWindow) {
+	      windowPos = (SeqNum_CLIENT - FirstSeqInWindow) / PAYLOAD;
+	      //if ((SeqNum_CLIENT - FirstSeqInWindow) % PAYLOAD != 0) windowPos++;
+	    }
+	    else {
+	      windowPos = (SeqNum_CLIENT + 25601 - FirstSeqInWindow) / PAYLOAD;
+	      //if ((SeqNum_CLIENT + 25601 - FirstSeqInWindow) % PAYLOAD != 0) windowPos++; 
+	    }
 	    //check duplicate
             if (Receiver_window[windowPos].isAcked()) {
                 sendACK(sockfd, addr, ackackNumber, false, true);
@@ -281,7 +298,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             
             //move window and transfer to buffer
             
-	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << move_counter << endl;
+	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << TempFile.size() << ' ' << move_counter << endl;
         } //end if
 	//cout << Receiver_window.size() << endl;
     } //end while
@@ -290,9 +307,15 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
 
 void assemblePackets()
 {
+    file_assembled++;
     char* actualfile = new char[TempFile.size() + 1];
     copy(TempFile.begin(), TempFile.end(), actualfile);
-    ofstream outfile("1.file", ios::binary | ios::out);
+    
+    char name[32];
+    memset(name, 0, 32);
+    sprintf (name, "%d.file", file_assembled);
+    
+    ofstream outfile(name, ios::binary | ios::out);
     outfile.write(actualfile, TempFile.size());
     outfile.close();
     delete actualfile;
@@ -306,8 +329,8 @@ int main(int argc, char *argv[]){
         exit(1);
     }
     
-    //signal(SIGQUIT,sigHandler);
-    //signal(SIGTERM,sigHandler);
+    signal(SIGQUIT,sigHandler);
+    signal(SIGTERM,sigHandler);
     
     int port = atoi(argv[1]);
     if (port < 1023 || port > 65535) {
@@ -326,14 +349,17 @@ int main(int argc, char *argv[]){
     my_addr.sin_port = htons(port);
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
-    bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr));
+    if (bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0){
+      cerr << "bind error" << endl;
+      exit(1);
+    }
     
+    while(1){
+      serverOpenConnection(sockfd, their_addr);
     
-    serverOpenConnection(sockfd, their_addr);
-    
-    receiveFile(sockfd, their_addr);
-    assemblePackets();
-    serverCloseConnection(sockfd, their_addr);
-    
-    return(1);
+      receiveFile(sockfd, their_addr);
+      assemblePackets();
+      serverCloseConnection(sockfd, their_addr);
+    }
+    return(0);
 }
