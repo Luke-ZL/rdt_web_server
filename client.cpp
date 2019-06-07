@@ -9,6 +9,7 @@
 #include <iostream>
 #include <signal.h>
 #include <sys/socket.h>
+#include <sys/stat.h>
 #include <netinet/in.h>
 #include <netinet/ip.h>
 #include <vector>
@@ -25,9 +26,8 @@ using namespace std;
 packet init[2];
 uint32_t SeqNum_SERVER;
 uint32_t SeqNum_CLIENT;
-uint32_t client_ack;
 
-int packet_count = 0;
+
 vector<packet> Sender_window;
 int ackNumber = 0; //sending packet's ack number, = receiving ack packet's seq number + 1
 int seqNumber = 0; //sending packet's sequence number
@@ -87,7 +87,7 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
             printMessage(receivedPacket,false,false);
             if(receivedPacket.isACK() and receivedPacket.isSYN() and receivedPacket.getAckNum() == SeqNum_CLIENT){
                 SeqNum_CLIENT = receivedPacket.getAckNum();
-                client_ack = (receivedPacket.getSeqNum() + 1) % 25601;
+               	SeqNum_SERVER = receivedPacket.getSeqNum();
                 return;
             }
         }
@@ -95,9 +95,11 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
 }
 
 
-/*
 void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char* fileBuffer)
 {
+  int counter = 0;
+  cout << fileSize << endl;
+    int packet_count = 0;
     socklen_t sin_size = sizeof(struct sockaddr_in);
     int lastACK = -1;
     int dupACK = -1;
@@ -107,46 +109,47 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
     char send_buf[PACKET_SIZE + 1];
     char read_buf[PACKET_SIZE + 1];
     while ((fileSize > 0) || (Sender_window.size() > 0)) {
-        if (Sender_window.size() < cwnd / PAYLOAD)
+      while ((Sender_window.size() < cwnd / PAYLOAD) && (fileSize > 0) )
         {
             packet sending_packet;
-            sending_packet.setSeqNum(seqNumber);
-            sending_packet.setAckNum(ackNumber);
+            sending_packet.setSeqNum(SeqNum_CLIENT);
+            sending_packet.setAckNum((SeqNum_SERVER + 1) % 25601);
             if (fileSize < PAYLOAD) {
                 sending_packet.setPayload(fileBuffer + packet_count * PAYLOAD, (int)fileSize);
                 fileSize = 0;
+		//cout << fileSize << endl;
             }
             else {
                 sending_packet.setPayload(fileBuffer + packet_count * PAYLOAD, (int)PAYLOAD);
                 fileSize -= PAYLOAD;
+		//cout << fileSize << endl;
             }
             sending_packet.DeConstructPacket(send_buf);
-            
+
             if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
-                       sizeof(addr)) < 0) {
+                sizeof(addr)) < 0) {
                 cerr << "Could not send to the client" << endl;
             }
             else {
                 Sender_window.push_back(sending_packet);
                 Sender_window.back().setSent();
                 Sender_window.back().initTimer();
-                cout << "SEND " << seqNumber << ' ' << ackNumber << ' ' << cwnd << ' ' << ssthresh << endl;
-                seqNumber = (seqNumber + Sender_window.back().getLength) % 25601;
+                cout << "SEND " << SeqNum_CLIENT << ' ' << sending_packet.getAckNum() << ' ' << cwnd << ' ' << ssthresh << endl;
+                SeqNum_CLIENT = (SeqNum_CLIENT + Sender_window.back().getLength()) % 25601;
                 packet_count++;
-                
             }
-        }// end if
-        
+        }// end while
+
         memset(read_buf, 0, PACKET_SIZE + 1);
         int recvlen = recvfrom(sockfd, read_buf, PACKET_SIZE, 0 | MSG_DONTWAIT,
-                               (struct sockaddr *)&addr, &sin_size);
+            (struct sockaddr *)&addr, &sin_size);
         if (recvlen > 0) {
             packet receiving_packet;
             read_buf[recvlen] = 0;
             receiving_packet.ConstructPacket(read_buf);
-            ackNumber = (receiving_packet.getSeqNum() + 1) % 25601;
+            SeqNum_SERVER = receiving_packet.getSeqNum();
             int Server_ack = receiving_packet.getAckNum();
-            cout << "RECV" << receiving_packet.getSeqNum() << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh;
+            cout << "RECV " << SeqNum_SERVER << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh << endl;
             if (Server_ack == lastACK) {
                 dupACK_count++;
                 if (dupACK == 3) {
@@ -155,15 +158,15 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                     cwnd = ssthresh + 1536;
                     Sender_window[0].DeConstructPacket(send_buf);
                     if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
-                               sizeof(addr)) < 0) {
+                        sizeof(addr)) < 0) {
                         cerr << "Could not send to the client" << endl;
                     }
                     else {
                         Sender_window[0].initTimer();
-                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << receiving_packet.getSeqNum() + 1 << ' ' << cwnd << ' ' << ssthresh << ' ' << "DUP" <<endl;
+                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << receiving_packet.getSeqNum() + 1 << ' ' << cwnd << ' ' << ssthresh << ' ' << "DUP" << endl;
                     }
                 }
-                else if (dupACK > 3){
+                else if (dupACK > 3) {
                     cwnd += PAYLOAD;
                     if (cwnd > 10240) cwnd = 10240;
                 }
@@ -172,20 +175,29 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
             else {
                 lastACK = Server_ack;
                 dupACK_count = 0;
-                if (FR) {
-                    FR = false;
-                    CA = true;
-                    cwnd = ssthresh;
-                }
+
                 int move_count = 0;
                 for (int i = 0; i < Sender_window.size(); i++) {
                     if (Sender_window[i].getSeqNum() <= Server_ack) move_count++;
                     else break;
                 }
                 Sender_window.erase(Sender_window.begin(), Sender_window.begin() + move_count);
+
+                if (FR) {
+                    FR = false;
+                    CA = true;
+                    cwnd = ssthresh;
+                    continue;
+                }
                 if (cwnd >= ssthresh) CA = true;
-                if (CA) cwnd += PAYLOAD * PAYLOAD / cwnd;
-                else cwnd += PAYLOAD;
+                if (CA) {
+		  cwnd += PAYLOAD * PAYLOAD / cwnd;
+		  if (cwnd > 10240) cwnd = 10240;
+		}
+                else {
+		  cwnd += PAYLOAD;
+		  if (cwnd > 10240) cwnd = 10240;
+		}
             }
         } //end if
         if (Sender_window.size() > 0) {
@@ -195,7 +207,7 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                 cwnd = ssthresh + 1536;
                 Sender_window[0].DeConstructPacket(send_buf);
                 if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
-                           sizeof(addr)) < 0) {
+                    sizeof(addr)) < 0) {
                     cerr << "Could not send to the client" << endl;
                 }
                 else {
@@ -204,9 +216,12 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                 }
             }
         }
+	cout << fileSize << ' ' << Sender_window.size() << endl;
+	//counter++;
+	//if (counter > 20) return;
     } //end while
 }
-*/
+
 
 void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
     packet sendFINPacket;
@@ -263,11 +278,6 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
     }
 }
 
-void sigHandler(int signum){
-    cerr << "INTERRUPT: Interrupted signal received" <<endl;
-    exit(signum);
-}
-
 int main(int argc, char *argv[]){
     if(argc != 4){
         cerr << "ERROR: Invalid number of arguments" << endl;
@@ -282,12 +292,30 @@ int main(int argc, char *argv[]){
     struct sockaddr_in addr;
     
     string hostname(argv[1]);
+    string filename(argv[3]);
     server = gethostbyname(hostname.c_str());
     memset((char *)&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     memcpy((char *)&addr.sin_addr.s_addr, (char *)server->h_addr,
            server->h_length);
     addr.sin_port = htons(port);
+    struct stat stat_buffer;
+    char* file_buffer;
+    long long int size;
+    if (!stat(filename.c_str(), &stat_buffer)){
+      ifstream File;
+      File.open(filename.c_str(), ios::in | ios::binary | ios::ate);
+      if (File.is_open()){
+	streampos f;
+	f = File.tellg();
+	size = (long long int) f;
+	file_buffer = new char[size + 1];
+	File.seekg(0, ios::beg);
+	File.read(file_buffer, size);
+	File.close();
+      }
+    }
+	
     /*
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
     if (sockfd < 0) {
@@ -345,12 +373,9 @@ int main(int argc, char *argv[]){
     */
     
     clientOpenConnection(sockfd, addr);
-    
-    //ackNumber = client_ack;
-    //seqNumber = SeqNum_CLIENT;
-    //sendFile();
-    cout << "finished" << endl;
+    sendFile(sockfd, addr, size, file_buffer);
+	
     clientCloseConnection(sockfd, addr);
-    
+	
     return 0;
 }

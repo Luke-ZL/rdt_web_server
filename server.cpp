@@ -77,7 +77,7 @@ void serverOpenConnection(int sockfd, struct sockaddr_in &addr){
             buffer[ret] = 0;
             receivedPacket.ConstructPacket(buffer);
             printMessage(receivedPacket, false, false);
-            
+            cout << (int)buffer[0] << ' ' << (int)buffer[1] << ' '<< (int)buffer[2] << ' '<< (int)buffer[3] <<  endl;
             
             if(receivedPacket.isSYN()){
                 packet sendingPacket;
@@ -133,13 +133,11 @@ void serverCloseConnection(int sockfd, struct sockaddr_in &addr){
                 SeqNum_CLIENT = receivedPacket.getSeqNum();
                 ackPacket.setFlag(FIN_FLAG);
                 ackPacket.setFlag(ACK_FLAG);
-                if(SeqNum_CLIENT + 1 > 25600)
-                    SeqNum_CLIENT = 0;
-                ackPacket.setAckNum(SeqNum_CLIENT + 1);
+                ackPacket.setAckNum((SeqNum_CLIENT + 1) % 25601);
                 ackPacket.setSeqNum(SeqNum_SERVER);
                 ackPacket.DeConstructPacket(send);
                 printMessage(ackPacket, true, false);
-                
+                cout << "HI";
                 sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
                 
                 memset((char*)&send,0,PACKET_SIZE+1);
@@ -203,7 +201,8 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             packet received_packet;
             received_packet.ConstructPacket(buf);
             SeqNum_CLIENT = received_packet.getSeqNum();
-            cout << "RECV " << SeqNum_CLIENT << ' ' << received_packet.getAckNum() << ' ' << 0 << ' ' << 0;
+            cout << "RECV " << SeqNum_CLIENT << ' ' << received_packet.getAckNum() << ' ' << 0 << ' ' << 0 << endl;;
+	    
             if (received_packet.isFIN()) {         
                 sendACK(sockfd, addr, (SeqNum_CLIENT + 1) % 25601, true, false);
                 break;
@@ -226,22 +225,26 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
                 if (Receiver_window[i].isAcked()) {
                     char buffer[1024];
                     Receiver_window[i].getPayload(buffer);
-                    for (int j = 0; j < Receiver_window[i].getLength(); i++) {
+                    for (int j = 0; j < Receiver_window[i].getLength(); j++) {
                         TempFile.push_back(buffer[j]);
                     }
                     move_counter++;
                 } //end if
                 else break;
             } //end for
+
+	    
+	    cout << "payload " << received_packet.getLength() << "temp " << TempFile.size() << endl; 
+	    
             ackackNumber = (Receiver_window[move_counter - 1].getLength() + Receiver_window[move_counter - 1].getSeqNum() + 1) % 25601;
             for (int i = 0; i < move_counter; i++) {
                 Receiver_window.erase(Receiver_window.begin());
                 Receiver_window.push_back(packet());
                 Receiver_window.end()->setSeqNum(lastSeqinWindow + (i + 1) * PAYLOAD);
             }
-            FirstSeqInWindow += move_counter * PAYLOAD;
-            lastSeqinWindow += move_counter * PAYLOAD;
-
+            FirstSeqInWindow = (FirstSeqInWindow + move_counter * PAYLOAD) % 25601;
+            lastSeqinWindow = (lastSeqinWindow +  move_counter * PAYLOAD) % 25601;
+	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << endl;
         } //end if
     } //end while
 }
@@ -264,8 +267,8 @@ int main(int argc, char *argv[]){
         exit(1);
     }
     
-    signal(SIGQUIT,sigHandler);
-    signal(SIGTERM,sigHandler);
+    //signal(SIGQUIT,sigHandler);
+    //signal(SIGTERM,sigHandler);
     
     int port = atoi(argv[1]);
     if (port < 1023 || port > 65535) {
