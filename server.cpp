@@ -27,10 +27,7 @@ using namespace std;
 vector<char> TempFile; //for the temporary file
 vector<packet> Receiver_window;
 int FirstSeqInWindow, lastSeqinWindow;
-int server_seq_count = 0; //server's ack package's seq number
 int ackackNumber; //ack package's ack number
-int seqNumber; //first SYN package's sequence number + 1
-
 packet init[2];
 uint32_t SeqNum_SERVER = 0;
 uint32_t SeqNum_CLIENT;
@@ -155,17 +152,15 @@ void serverCloseConnection(int sockfd, struct sockaddr_in &addr){
     }
 }
 
-
-/*
 void sendACK(int sockfd, struct sockaddr_in addr, int ack_num, bool finpa, bool dupa) {
     packet ack_packet;
-    ack_packet.setSeqNum(server_seq_count);
+    ack_packet.setSeqNum(SeqNum_SERVER);
     ack_packet.setAckNum(ack_num);
     ack_packet.setFlag(ACK);
     char send_buf[PACKET_SIZE + 1];
     ack_packet.DeConstructPacket(send_buf);
     if (sendto(sockfd, send_buf, PACKET_SIZE, 0, (struct sockaddr *)&addr,
-               sizeof(addr)) < 0) {
+        sizeof(addr)) < 0) {
         cerr << "Could not send to the client" << endl;
     }
     else {
@@ -173,47 +168,49 @@ void sendACK(int sockfd, struct sockaddr_in addr, int ack_num, bool finpa, bool 
         if (finpa) cout << " FIN";
         if (dupa) cout << " DUP";
         cout << endl;
+        SeqNum_SERVER = (SeqNum_SERVER + 1) % 25601;
     }
 }
+
+
 void receiveFile(int sockfd, struct sockaddr_in addr)
 {
+    ackackNumber = SeqNum_CLIENT + 1;
     //initialize the receiver's window
     for (int i = 0; i < RECEIVER_WINDOW_SIZE; i++)
     {
         Receiver_window.push_back(packet());
-        Receiver_window[i].setSeqNum((PAYLOAD*i + seqNumber) % 25601);
+        Receiver_window[i].setSeqNum((PAYLOAD*i + SeqNum_CLIENT + 1) % 25601);
     }
-    FirstSeqInWindow = seqNumber % 25601;
-    lastSeqinWindow = (PAYLOAD * RECEIVER_WINDOW_SIZE - PAYLOAD + seqNumber) % 25601;
+    FirstSeqInWindow = Receiver_window[0].getSeqNum();
+    lastSeqinWindow = Receiver_window.back().getSeqNum();
     int recv_len;
     socklen_t sin_size;
     char buf[PACKET_SIZE + 1];
     while (true) {
         recv_len = recvfrom(sockfd, buf, PACKET_SIZE, 0 | MSG_DONTWAIT,
-                            (struct sockaddr *)&addr, &sin_size);
+            (struct sockaddr *)&addr, &sin_size);
         if (recv_len > 0) {
             packet received_packet;
             received_packet.ConstructPacket(buf);
-            cout << "RECV " << received_packet.getSeqNum() << ' ' << received_packet.getAckNum() << ' ' << 0 << ' ' << 0;
-            if (received_packet.isFIN()) {
-                cout << " FIN" << endl;
-                sendACK(sockfd, addr, received_packet.getSeqNum() + 1, true, false);
-                server_seq_count = (server_seq_count + 1) % 25601;
+            SeqNum_CLIENT = received_packet.getSeqNum();
+            cout << "RECV " << SeqNum_CLIENT << ' ' << received_packet.getAckNum() << ' ' << 0 << ' ' << 0;
+            if (received_packet.isFIN()) {         
+                sendACK(sockfd, addr, (SeqNum_CLIENT + 1) % 25601, true, false);
                 break;
             }// end if(isFIN)
-            int currentSeq = received_packet.getSeqNum();
-            int windowPos = (currentSeq - FirstSeqInWindow) / PAYLOAD;
+            //int currentSeq = received_packet.getSeqNum();
+            int windowPos = (SeqNum_CLIENT - FirstSeqInWindow) / PAYLOAD;
             //check duplicate
             if (Receiver_window[windowPos].isAcked()) {
-                server_seq_count = (server_seq_count + 1) % 25601;
-                cout << " DUP" << endl;
                 sendACK(sockfd, addr, ackackNumber, false, true);
                 continue;
             }
-            else {
-                Receiver_window[windowPos] = received_packet;
-                Receiver_window[windowPos].%ed();
-            }
+            
+            sendACK(sockfd, addr, ackackNumber, false, false);
+            Receiver_window[windowPos] = received_packet;
+            Receiver_window[windowPos].setAcked();
+            
             //move window and transfer to buffer
             int move_counter = 0;
             for (int i = 0; i < RECEIVER_WINDOW_SIZE; i++) {
@@ -235,12 +232,11 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             }
             FirstSeqInWindow += move_counter * PAYLOAD;
             lastSeqinWindow += move_counter * PAYLOAD;
-            cout << endl;
-            sendACK(sockfd, addr, ackackNumber, false, false);
-            server_seq_count = (server_seq_count + 1) % 25601;
+
         } //end if
     } //end while
 }
+
 void assemblePackets()
 {
     char* actualfile = new char[TempFile.size() + 1];
@@ -252,7 +248,7 @@ void assemblePackets()
     TempFile.clear(); //ready for next file
 }
 
-*/
+
 int main(int argc, char *argv[]){
     if(argc != 2){
         cerr << "ERROR: Invalid arguments" << endl;
@@ -281,8 +277,8 @@ int main(int argc, char *argv[]){
     
     serverOpenConnection(sockfd, their_addr);
     
-    //receiveFile(sockfd, addr);
-    cout << "finished" << endl;
+    receiveFile(sockfd, their_addr);
+    assemblePackets();
     serverCloseConnection(sockfd, their_addr);
     
     return(1);
