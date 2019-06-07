@@ -300,6 +300,9 @@ int main(int argc, char *argv[]){
 
     
     int port = atoi(argv[2]);
+    if (port < 1023 || port > 65535) {
+        cerr << "ERROR: Invalid port number" << endl;
+    }
     int sockfd = socket(AF_INET, SOCK_DGRAM,0);
     
     struct hostent *server;
