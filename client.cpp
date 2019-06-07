@@ -227,7 +227,9 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
             }
         }
 	
-	
+	/*for(int i = 0;i < Sender_window.size();i++)
+	  cout << Sender_window[i].getSeqNum() << ' ';
+	  cout << endl;*/
 	//cout << Sender_window.size() << ' ' << Sender_window[0].getSeqNum() <<endl;
     } //end while
     
@@ -300,9 +302,6 @@ int main(int argc, char *argv[]){
 
     
     int port = atoi(argv[2]);
-    if (port < 1023 || port > 65535) {
-        cerr << "ERROR: Invalid port number" << endl;
-    }
     int sockfd = socket(AF_INET, SOCK_DGRAM,0);
     
     struct hostent *server;

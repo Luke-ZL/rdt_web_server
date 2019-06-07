@@ -236,8 +236,10 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
                 break;
             }// end if(isFIN)
             //int currentSeq = received_packet.getSeqNum();
-            int windowPos = (SeqNum_CLIENT - FirstSeqInWindow) / PAYLOAD;
-			//check duplicate
+            int windowPos;
+	    if (SeqNum_CLIENT >= FirstSeqInWindow) windowPos = (SeqNum_CLIENT - FirstSeqInWindow) / PAYLOAD;
+	    else windowPos = (SeqNum_CLIENT + 25601 - FirstSeqInWindow) / PAYLOAD;
+	    //check duplicate
             if (Receiver_window[windowPos].isAcked()) {
                 sendACK(sockfd, addr, ackackNumber, false, true);
                 continue;
@@ -266,7 +268,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             for (int i = 0; i < move_counter; i++) {
                 Receiver_window.erase(Receiver_window.begin());
                 Receiver_window.push_back(packet());
-                Receiver_window.end()->setSeqNum(lastSeqinWindow + (i + 1) * PAYLOAD);
+                Receiver_window.back().setSeqNum((lastSeqinWindow + (i + 1) * PAYLOAD) % 25601);
             }
             FirstSeqInWindow = (FirstSeqInWindow + move_counter * PAYLOAD) % 25601;
             lastSeqinWindow = (lastSeqinWindow +  move_counter * PAYLOAD) % 25601;
@@ -279,7 +281,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             
             //move window and transfer to buffer
             
-	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << TempFile.size() << endl;
+	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << move_counter << endl;
         } //end if
 	//cout << Receiver_window.size() << endl;
     } //end while
