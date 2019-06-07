@@ -29,8 +29,8 @@ uint32_t SeqNum_CLIENT;
 
 
 vector<packet> Sender_window;
-int ackNumber = 0; //sending packet's ack number, = receiving ack packet's seq number + 1
-int seqNumber = 0; //sending packet's sequence number
+//int ackNumber = 0; //sending packet's ack number, = receiving ack packet's seq number + 1
+//int seqNumber = 0; //sending packet's sequence number
 
 
 int cwnd = 512;
@@ -66,7 +66,9 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
     sendingPacket.setSeqNum(SeqNum_CLIENT);
     sendingPacket.DeConstructPacket(send);
     printMessage(sendingPacket, true, false);
-                    
+
+    //cout << (int)send[0] << ' ' << (int)send[1] << ' '<< (int)send[2] << ' '<< (int)send[3] << ' ';
+    
     if(sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr)) < 0){
         cerr << "ERROR: sending packet failed" << endl;
         exit(1);
@@ -97,8 +99,8 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
 
 void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char* fileBuffer)
 {
-  int counter = 0;
-  cout << fileSize << endl;
+  //int counter = 0;
+  //cout << fileSize << endl;
     int packet_count = 0;
     socklen_t sin_size = sizeof(struct sockaddr_in);
     int lastACK = -1;
@@ -137,6 +139,7 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                 cout << "SEND " << SeqNum_CLIENT << ' ' << sending_packet.getAckNum() << ' ' << cwnd << ' ' << ssthresh << endl;
                 SeqNum_CLIENT = (SeqNum_CLIENT + Sender_window.back().getLength()) % 25601;
                 packet_count++;
+		//cout << fileSize << endl;
             }
         }// end while
 
@@ -149,8 +152,9 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
             receiving_packet.ConstructPacket(read_buf);
             SeqNum_SERVER = receiving_packet.getSeqNum();
             int Server_ack = receiving_packet.getAckNum();
-            cout << "RECV " << SeqNum_SERVER << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh << endl;
+            cout << "RECV " << SeqNum_SERVER << ' ' << Server_ack << ' ' << cwnd << ' ' << ssthresh << " ACK";
             if (Server_ack == lastACK) {
+	      cout << " DUP" << endl;
                 dupACK_count++;
                 if (dupACK == 3) {
                     FR = true;
@@ -163,26 +167,32 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                     }
                     else {
                         Sender_window[0].initTimer();
-                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << receiving_packet.getSeqNum() + 1 << ' ' << cwnd << ' ' << ssthresh << ' ' << "DUP" << endl;
+                        cout << "SEND " << Sender_window[0].getSeqNum() << ' ' << (receiving_packet.getSeqNum() + 1) % 25601 << ' ' << cwnd << ' ' << ssthresh << ' ' << "DUP" << endl;
                     }
                 }
                 else if (dupACK > 3) {
                     cwnd += PAYLOAD;
                     if (cwnd > 10240) cwnd = 10240;
                 }
-                else break;
+                else continue;
             }
             else {
+	        cout << endl;
                 lastACK = Server_ack;
                 dupACK_count = 0;
 
                 int move_count = 0;
                 for (int i = 0; i < Sender_window.size(); i++) {
-                    if (Sender_window[i].getSeqNum() <= Server_ack) move_count++;
-                    else break;
+		  int Window_ack = (Sender_window[i].getSeqNum()+1) % 25601;
+		  if (Window_ack < Server_ack) move_count++;
+		  else if (Server_ack < Window_ack) {
+		    if ((Window_ack - Server_ack) > 12800) move_count++;
+		    else break;
+		  }
                 }
+		
                 Sender_window.erase(Sender_window.begin(), Sender_window.begin() + move_count);
-
+		//cout <<  Sender_window.size() << endl;
                 if (FR) {
                     FR = false;
                     CA = true;
@@ -216,10 +226,11 @@ void sendFile(int sockfd, struct sockaddr_in &addr, long long int fileSize, char
                 }
             }
         }
-	cout << fileSize << ' ' << Sender_window.size() << endl;
-	//counter++;
-	//if (counter > 20) return;
+	
+	
+	//cout << Sender_window.size() << ' ' << Sender_window[0].getSeqNum() <<endl;
     } //end while
+    
 }
 
 
@@ -236,7 +247,10 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
     sendFINPacket.setAckNum(0);
     sendFINPacket.setFlag(FIN_FLAG);
     sendFINPacket.DeConstructPacket(send);
+    
     printMessage(sendFINPacket,true,false);
+
+    
     if(sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr)) < 0){
         cerr << "ERROR: sending packet failed" << endl;
         exit(1);
@@ -261,8 +275,7 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
                 //SEND ACK PACKET after receiving FIN
                 SeqNum_SERVER = receivedPacket.getSeqNum();
                 ackPacket.setFlag(ACK_FLAG);
-                if(SeqNum_SERVER + 1 > 25600)
-                    SeqNum_SERVER = 0;
+                SeqNum_SERVER = (SeqNum_SERVER + 1) % 25601;
                 ackPacket.setAckNum(SeqNum_SERVER + 1);
                 ackPacket.setSeqNum(SeqNum_CLIENT);
                 ackPacket.DeConstructPacket(send);
@@ -271,9 +284,10 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
                 sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
                 
                 memset((char*)&send,0,PACKET_SIZE+1);
+		exit(0);
             }
 
-            exit(0);
+            
         }
     }
 }
