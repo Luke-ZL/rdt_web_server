@@ -13,9 +13,9 @@ private:
 	struct header {
 		uint32_t SeqNum;
 		uint32_t AckNum;
-	    uint16_t len;
+	        uint16_t len;
 		uint8_t flags;
-		uint8_t padding = 0;
+		uint8_t padding;
 	}; //12 bytes in total
 	header hd;
 	char payload[PAYLOAD];

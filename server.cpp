@@ -146,6 +146,7 @@ void serverCloseConnection(int sockfd, struct sockaddr_in &addr){
                 //send FIN packet
                 packet finPacket;
                 finPacket.setFlag(FIN_FLAG);
+		finPacket.setFlag(ACK_FLAG);
                 finPacket.setAckNum(0);
                 finPacket.setSeqNum(SeqNum_SERVER);
                 finPacket.DeConstructPacket(send);
@@ -154,16 +155,26 @@ void serverCloseConnection(int sockfd, struct sockaddr_in &addr){
                 
                 
                 memset((char*)&buffer,0,PACKET_SIZE+1);
-
-
-		while(true){
-		  ssize_t ret = recvfrom(sockfd, buffer, PACKET_SIZE, 0, (struct sockaddr*)&addr, &len);
+		finPacket.initTimer();
+		chrono::time_point<chrono::system_clock> timer = chrono::system_clock::now();
+		chrono::time_point<chrono::system_clock> now = chrono::system_clock::now();
+		chrono::duration<double> elapsed_seconds = now  - timer;
+		while(elapsed_seconds.count() < 2){
+		  ssize_t ret = recvfrom(sockfd, buffer, PACKET_SIZE, 0 | MSG_DONTWAIT, (struct sockaddr*)&addr, &len);
 		  if (ret > 0){
 		     buffer[ret] = 0;
 		     receivedPacket.ConstructPacket(buffer);
 		     printMessage(receivedPacket, false, false);
 		     return;
 		  }
+		  else {
+		    if (finPacket.checkTimeout()) {
+		      sendto(sockfd, send, PACKET_SIZE, 0, (struct sockaddr *)&addr, sizeof(addr));
+		      finPacket.initTimer();
+		    }
+		  }
+		  now = chrono::system_clock::now();
+		  elapsed_seconds = now  - timer;
 		}
 		//      }
 		// }
@@ -243,7 +254,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
 	    //cout <<received_packet.getLength() << endl;
 	    
             if (received_packet.isFIN()) {         
-                sendACK(sockfd, addr, (SeqNum_CLIENT + 1) % 25601, true, false);
+                sendACK(sockfd, addr, (SeqNum_CLIENT + 1) % 25601, false, false);
                 break;
             }// end if(isFIN)
             //int currentSeq = received_packet.getSeqNum();
@@ -298,7 +309,7 @@ void receiveFile(int sockfd, struct sockaddr_in addr)
             
             //move window and transfer to buffer
             
-	    cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << TempFile.size() << ' ' << move_counter << endl;
+	    //cout << FirstSeqInWindow << ' ' << lastSeqinWindow << ' ' << TempFile.size() << ' ' << move_counter << endl;
         } //end if
 	//cout << Receiver_window.size() << endl;
     } //end while
@@ -335,6 +346,7 @@ int main(int argc, char *argv[]){
     int port = atoi(argv[1]);
     if (port < 1023 || port > 65535) {
         cerr << "ERROR: Invalid port number" << endl;
+	exit(1);
     }
     
     int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -350,7 +362,7 @@ int main(int argc, char *argv[]){
     my_addr.sin_addr.s_addr = htonl(INADDR_ANY);
     
     if (bind(sockfd, (struct sockaddr *)&my_addr, sizeof(struct sockaddr)) < 0){
-      cerr << "bind error" << endl;
+      cerr << "ERROR: bind" << endl;
       exit(1);
     }
     

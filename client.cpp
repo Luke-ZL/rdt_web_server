@@ -37,6 +37,7 @@ int cwnd = 512;
 int ssthresh = 5120;
 
 void printMessage(packet mPacket, bool Sent, bool isDup){
+  if ((mPacket.getSeqNum() == 0) && (mPacket.getAckNum() == 0)) return;
     if(Sent)
         cout << "SEND " << mPacket.getSeqNum() << " " << mPacket.getAckNum() << " " << cwnd << " " << ssthresh;
     else
@@ -80,6 +81,7 @@ void clientOpenConnection(int sockfd, struct sockaddr_in &addr){
     socklen_t len = sizeof(struct sockaddr_in);
     //receive ACK+SYN packet from server
     char buf[PACKET_SIZE+1];
+
     while(true){
         int ret = recvfrom(sockfd, buf, PACKET_SIZE, 0, (struct sockaddr*)&addr, &len);
         if(ret>0){
@@ -263,16 +265,28 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
     memset((char*)&send,0,PACKET_SIZE+1);
     
     socklen_t len = sizeof(struct sockaddr_in);
-    while(true){
-        ssize_t ret = recvfrom(sockfd, buffer, PACKET_SIZE, 0, (struct sockaddr*)&addr, &len);
+    chrono::time_point<chrono::system_clock> timer;
+    chrono::time_point<chrono::system_clock> now;
+    //sendFINPacket.initTimer();
+    while (true){
+     ssize_t ret = recvfrom(sockfd, buffer, PACKET_SIZE, 0 | MSG_DONTWAIT, (struct sockaddr*)&addr, &len);
+     if (ret > 0){
+       printMessage(receivedPacket, false, false);
+       timer = chrono::system_clock::now();
+       break;
+       }
+    }
+    now = chrono::system_clock::now();
+    chrono::duration<double> elapsed_seconds = now - timer; 
+    
+    while(elapsed_seconds.count() < 2){
+        ssize_t ret = recvfrom(sockfd, buffer, PACKET_SIZE, 0 | MSG_DONTWAIT, (struct sockaddr*)&addr, &len);
         
         if(ret > 0){
-            //receive FIN packet
-            buffer[ret] = 0;
-            receivedPacket.ConstructPacket(buffer);
-            printMessage(receivedPacket, false, false);
-            
-            if(receivedPacket.isFIN()){
+	  buffer[ret] = 0;
+	  receivedPacket.ConstructPacket(buffer);
+	  printMessage(receivedPacket, false, false);
+	  if(receivedPacket.isFIN()){
                 packet ackPacket;
                 //SEND ACK PACKET after receiving FIN
                 SeqNum_SERVER = receivedPacket.getSeqNum();
@@ -291,6 +305,9 @@ void clientCloseConnection(int sockfd, struct sockaddr_in &addr){
 
             
         }
+	now = chrono::system_clock::now();
+	elapsed_seconds = now  - timer;
+
     }
 }
 
@@ -302,14 +319,22 @@ int main(int argc, char *argv[]){
 
     
     int port = atoi(argv[2]);
-    int sockfd = socket(AF_INET, SOCK_DGRAM,0);
+    if (port < 1023 || port > 65535) {
+        cerr << "ERROR: Invalid port number" << endl;
+	exit(1);
+    }
+    
+    int sockfd = socket(AF_INET, SOCK_DGRAM,0);    
     
     struct hostent *server;
     struct sockaddr_in addr;
     
     string hostname(argv[1]);
     string filename(argv[3]);
-    server = gethostbyname(hostname.c_str());
+    if ((server = gethostbyname(hostname.c_str())) == NULL) {
+      cerr << "ERROR: cannot get host\n";
+      exit(1);
+    }
     memset((char *)&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
     memcpy((char *)&addr.sin_addr.s_addr, (char *)server->h_addr,
@@ -332,61 +357,6 @@ int main(int argc, char *argv[]){
       }
     }
 	
-    /*
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        cerr << "ERROR: Socket creation failed" << endl;
-        exit(1);
-    }
-    
-    struct hostent *host;
-    stringstream geek(argv[2]);
-    short port = 0;
-    geek >> port;
-    
-    if (port < 1023 || port > 65535) {
-        cerr << "ERROR: Incorrect port" << endl;
-        close(sockfd);
-        exit(1);
-    }
-    
-    host = gethostbyname(argv[1]);
-    if (host->h_name == NULL) {
-        cerr << "ERROR: Invalid hostname" << endl;
-        close(sockfd);
-        exit(1);
-    }
-    
-    in_addr* address = (in_addr*)host->h_addr;
-    const char* ip_address = inet_ntoa(*address);
-    
-    struct sockaddr_in serverAddr;
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(port);
-    serverAddr.sin_addr.s_addr =  inet_addr(ip_address);
-    memset(serverAddr.sin_zero, '\0', sizeof(serverAddr.sin_zero));
-    socklen_t serverAddr_len = sizeof(serverAddr);
-    
-    const char* fname = argv[3];
-    FILE* f = fopen(fname, "r");
-    if (!f) {
-        cerr << "ERROR: Cannot open file" << endl;
-        exit(1);
-    }
-    
-    
-    /*
-    char* hostname = argv[1];
-    char* portstring = argv[2];
-    char* file = argv[3];
-    
-    struct addrinfo hints;
-    memset(&hints, 0, sizeof(struct addrinfo));
-    hints.ai_family = AF_INET;
-    hints.ia_socktype = SOCK_DGRAM;
-    hints.ai_protocol = 0;
-    int s = getaddrinfo(hostname, portstring, &hints, &result);
-    */
     
     clientOpenConnection(sockfd, addr);
     sendFile(sockfd, addr, size, file_buffer);
