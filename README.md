@@ -9,7 +9,7 @@ UDP version of TCP reliable data transfer model, including protocols such as con
 
 [client.cpp](https://github.com/lliu0809/rdt_web_server/blob/master/client.cpp) implents the client side. After finishing the transmission, it will send a FIN packet to the server. When it receives an ACK and FIN from the server, it will enter a 2 seconds countdown, after which closing the connection with the server.<br/>
 
-## 
+## INSTALLING AND RUNNING
 To run the system and begin file transfering, download [VirtualBox](https://www.virtualbox.org).
 To build the files:
 ```
