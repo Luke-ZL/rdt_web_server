@@ -1,4 +1,4 @@
-UDP version of TCP reliable data transfer model, including protocols such as connection management, congestion control, <br/>
+UDP version of TCP reliable data transfer model, including protocols such as connection management, congestion control, 
 and loss handling, implemented with [BSD sockets](https://www.keil.com/pack/doc/mw6/Network/html/using_network_sockets_bsd.html).
 
 
